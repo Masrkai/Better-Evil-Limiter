@@ -14,17 +14,27 @@ Check out the open-source alternative [EvilLimiter for Windows](https://github.c
 ## Requirements
 - Linux distribution
 - Python 3 or greater
-- TODO: Adding packages needed
-
-## Installation
-
+- These python packages
 ```bash
-git clone https://github.com/bitbrute/evillimiter.git
-cd evillimiter
-sudo python3 setup.py install
+colorama
+netaddr
+netifaces
+tqdm
+scapy
+terminaltables
 ```
 
-Alternatively, you can download a desired version from the [Release page](https://github.com/bitbrute/evillimiter/releases).<br>
+## Installation //Manual
+
+```bash
+git clone https://github.com/Masrkai/Better-Evil-Limiter.git
+cd Better-Evil-Limiter/evillimiter/
+sudo python3 evillimiter.py
+
+# Hint: use "-f" if you encounter issues
+sudo python3 evillimiter.py -f
+```
+
 
 ## Usage
 
