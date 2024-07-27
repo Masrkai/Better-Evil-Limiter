@@ -1,11 +1,8 @@
-<p align="center"><img src="https://i.imgur.com/CBGh0Yx.png" /></p>
+# Better-Evil-Limiter
 
-# Evil Limiter
-
-[![License Badge](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License Badge](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE)
 [![Compatibility](https://img.shields.io/badge/python-3-brightgreen.svg)](PROJECT)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://GitHub.com/bitbrute/evillimiter/graphs/commit-activity)
-[![HitCount](http://hits.dwyl.io/bitbrute/evillimiter.svg)](http://hits.dwyl.io/bitbrute/evillimiter)
 [![Open Source Love](https://badges.frapsoft.com/os/v3/open-source.svg?v=102)](https://github.com/ellerbrock/open-source-badge/)
 
 A tool to monitor, analyze and limit the bandwidth (upload/download) of devices on your local network without physical or administrative access.<br>
@@ -17,8 +14,7 @@ Check out the open-source alternative [EvilLimiter for Windows](https://github.c
 ## Requirements
 - Linux distribution
 - Python 3 or greater
-
-Possibly missing python packages will be installed during the installation process.
+- TODO: Adding packages needed
 
 ## Installation
 
@@ -73,15 +69,13 @@ Type ```evillimiter``` or ```python3 bin/evillimiter``` to run the tool.
 - **Limits IPv4 connctions only**, since [ARP spoofing](https://en.wikipedia.org/wiki/ARP_spoofing) requires the ARP packet that is only present  on IPv4 networks.
 
 ## Disclaimer
-[Evil Limiter](https://github.com/bitbrute/evillimiter) is provided by [bitbrute](https://github.com/bitbrute) "as is" and "with all faults". The provider makes no representations or warranties of any kind concerning the safety, suitability, lack of viruses, inaccuracies, typographical errors, or other harmful components of this software. There are inherent dangers in the use of any software, and you are solely responsible for determining whether Evil Limiter is compatible with your equipment and other software installed on your equipment. You are also solely responsible for the protection of your equipment and backup of your data, and the provider will not be liable for any damages you may suffer in connection with using, modifying, or distributing this software. 
+[Evil Limiter](https://github.com/bitbrute/evillimiter) is provided by [bitbrute](https://github.com/bitbrute) "as is" and my part was just to enhance it so it's not a tool to install and just be as a runnable script instead by making [Better-Evil-Limiter](https://github.com/Masrkai/Better-Evil-Limiter) and "with all faults". The provider now me [Masrkai](https://github.com/Masrkai) makes no representations or warranties of any kind concerning the safety, suitability, lack of viruses, inaccuracies, typographical errors, or other harmful components of this software. There are inherent dangers in the use of any software, and you are solely responsible for determining whether Evil Limiter is compatible with your equipment and other software installed on your equipment. You are also solely responsible for the protection of your equipment and backup of your data, and the provider will not be liable for any damages you may suffer in connection with using, modifying, or distributing this software. 
+
+- Basically how **MIT** license is @-@
+
+And I am [Masrkai](https://github.com/Masrkai) keeping the wish of the original developer [bitbrute](https://github.com/bitbrute) to keep it licensed as MIT
 
 ## License
 
-Copyright (c) 2019 by [bitbrute](https://github.com/bitbrute). Some rights reserved.<br>
-[Evil Limiter](https://github.com/bitbrute/evillimiter) is licensed under the MIT License as stated in the [LICENSE file](LICENSE).
-
-## Donation
-You like my projects? Feel free to help me pay off my incredibly overprized Mercedes VIP leasing contract. <3
-
-BTC: 16oNzE8Vkcz8YQfnHF4g19moN3E6wc8E31<br>
-ETH: 0xB08D257cf5B76dB0D2fBAd1E68f52b9cCE3581e3
+Copyright (c) 2024 by [Masrkai](https://github.com/Masrkai). Some rights reserved.<br>
+[Better-Evil-Limiter](https://github.com/Masrkai/Better-Evil-Limiter) is licensed under the MIT License as stated in the [LICENSE file](LICENSE).
