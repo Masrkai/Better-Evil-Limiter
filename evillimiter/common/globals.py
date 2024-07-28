@@ -1,4 +1,4 @@
-import evillimiter.console.shell as shell
+import console.shell as shell
 
 BROADCAST = 'ff:ff:ff:ff:ff:ff'
 

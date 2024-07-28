@@ -1,4 +1,4 @@
-from evillimiter.console.io import IO
+from console.io import IO
 
 
 class Host(object):

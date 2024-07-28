@@ -1,9 +1,8 @@
 import threading
 
-import evillimiter.console.shell as shell
+import console.shell as shell
 from .host import Host
-from evillimiter.common.globals import BIN_TC, BIN_IPTABLES
-from evillimiter.console.io import IO
+from console.io import IO
 
 
 class Limiter(object):
@@ -19,9 +18,11 @@ class Limiter(object):
 
     def limit(self, host, direction, rate):
         """
-        Limits the uload/dload traffic of a host
+        Limits the upload/download traffic of a host
         to a specified rate
         """
+        from common.globals import BIN_TC, BIN_IPTABLES
+
         host_ids = self._new_host_limit_ids(host, direction)
 
         if (direction & Direction.OUTGOING) == Direction.OUTGOING:
@@ -42,9 +43,11 @@ class Limiter(object):
         host.limited = True
 
         with self._host_dict_lock:
-            self._host_dict[host] = { 'ids': host_ids, 'rate': rate, 'direction': direction }
+            self._host_dict[host] = {'ids': host_ids, 'rate': rate, 'direction': direction}
 
     def block(self, host, direction):
+        from common.globals import BIN_IPTABLES
+
         host_ids = self._new_host_limit_ids(host, direction)
 
         if (direction & Direction.OUTGOING) == Direction.OUTGOING:
@@ -57,12 +60,14 @@ class Limiter(object):
         host.blocked = True
 
         with self._host_dict_lock:
-            self._host_dict[host] = { 'ids': host_ids, 'rate': None, 'direction': direction }
+            self._host_dict[host] = {'ids': host_ids, 'rate': None, 'direction': direction}
 
     def unlimit(self, host, direction):
+        from common.globals import BIN_TC, BIN_IPTABLES
+
         if not host.limited and not host.blocked:
             return
-            
+
         with self._host_dict_lock:
             host_ids = self._host_dict[host]['ids']
 
@@ -130,9 +135,9 @@ class Limiter(object):
         self._host_dict_lock.release()
 
         if present:
-                host_ids = self._host_dict[host]['ids']
-                self.unlimit(host, direction)
-        
+            host_ids = self._host_dict[host]['ids']
+            self.unlimit(host, direction)
+
         return Limiter.HostLimitIDs(*self._create_ids()) if host_ids is None else host_ids
 
     def _create_ids(self):
@@ -159,6 +164,8 @@ class Limiter(object):
         return (id1, generate_id(id1))
 
     def _delete_tc_class(self, id_):
+        from common.globals import BIN_TC
+
         """
         Deletes the tc class and applied filters
         for a given ID (host)
@@ -167,6 +174,8 @@ class Limiter(object):
         shell.execute_suppressed('{} class del dev {} parent 1:0 classid 1:{}'.format(BIN_TC, self.interface, id_))
 
     def _delete_iptables_entries(self, host, direction, id_):
+        from common.globals import BIN_IPTABLES
+
         """
         Deletes iptables rules for a given ID (host)
         """

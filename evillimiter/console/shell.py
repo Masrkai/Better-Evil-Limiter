@@ -1,6 +1,6 @@
 import os
 import subprocess
-from evillimiter.console.io import IO
+from .io import IO
 
 DEVNULL = open(os.devnull, 'w')
 

@@ -5,10 +5,11 @@ import argparse
 import platform
 import collections
 
-import evillimiter.networking.utils as netutils
-from evillimiter.menus.main_menu import MainMenu
-from evillimiter.console.banner import get_main_banner
-from evillimiter.console.io import IO
+
+import networking.utils as netutils
+from menus.main_menu import MainMenu
+from console.banner import get_main_banner
+from console.io import IO
 
 
 InitialArguments = collections.namedtuple('InitialArguments', 'interface, gateway_ip, netmask, gateway_mac')

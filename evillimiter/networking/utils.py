@@ -2,8 +2,8 @@ import re
 import netifaces
 from scapy.all import ARP, sr1 # pylint: disable=no-name-in-module
 
-import evillimiter.console.shell as shell
-from evillimiter.common.globals import BIN_TC, BIN_IPTABLES, BIN_SYSCTL, IP_FORWARD_LOC
+import console.shell as shell
+from common.globals import BIN_TC, BIN_IPTABLES, BIN_SYSCTL, IP_FORWARD_LOC
 
 
 def get_default_interface():

@@ -4,21 +4,20 @@ import curses
 import netaddr
 import threading
 import collections
+
 from terminaltables import SingleTable
-
-import evillimiter.networking.utils as netutils
 from .menu import CommandMenu
-from evillimiter.networking.utils import BitRate
-from evillimiter.console.io import IO
-from evillimiter.console.chart import BarChart
-from evillimiter.console.banner import get_main_banner
-from evillimiter.networking.host import Host
-from evillimiter.networking.limit import Limiter, Direction
-from evillimiter.networking.spoof import ARPSpoofer
-from evillimiter.networking.scan import HostScanner, ScanIntensity
-from evillimiter.networking.monitor import BandwidthMonitor
-from evillimiter.networking.watch import HostWatcher
+from console.io import IO
+from console.chart import BarChart
+from console.banner import get_main_banner
 
+import networking.utils as netutils
+from networking.host import Host
+from networking.limit import Limiter, Direction
+from networking.spoof import ARPSpoofer
+from networking.scan import HostScanner, ScanIntensity
+from networking.monitor import BandwidthMonitor
+from networking.watch import HostWatcher
 
 class MainMenu(CommandMenu):
     def __init__(self, version, interface, gateway_ip, gateway_mac, netmask):
@@ -74,13 +73,12 @@ class MainMenu(CommandMenu):
         self.parser.add_subparser('quit', self._quit_handler)
         self.parser.add_subparser('exit', self._quit_handler)
 
-        self.version = version          # application version
-        self.interface = interface      # specified IPv4 interface
-        self.gateway_ip = gateway_ip 
+        self.version = version
+        self.interface = interface
+        self.gateway_ip = gateway_ip
         self.gateway_mac = gateway_mac
         self.netmask = netmask
 
-        # range of IP address calculated from gateway IP and netmask
         self.iprange = list(netaddr.IPNetwork('{}/{}'.format(self.gateway_ip, self.netmask)))
 
         self.host_scanner = HostScanner(self.interface, self.iprange)
@@ -89,17 +87,13 @@ class MainMenu(CommandMenu):
         self.bandwidth_monitor = BandwidthMonitor(self.interface, 1)
         self.host_watcher = HostWatcher(self.interface, self.iprange, self._reconnect_callback)
 
-        # holds discovered hosts
         self.hosts = []
         self.hosts_lock = threading.Lock()
 
         self._print_help_reminder()
 
-        # start the spoof thread
         self.arp_spoofer.start()
-        # start the bandwidth monitor thread
         self.bandwidth_monitor.start()
-        # start the host watch thread
         self.host_watcher.start()
 
     def interrupt_handler(self, ctrl_c=True):
@@ -115,10 +109,6 @@ class MainMenu(CommandMenu):
             self._free_host(host)
 
     def _scan_handler(self, args):
-        """
-        Handles 'scan' command-line argument
-        (Re)scans for hosts on the network
-        """
         if args.iprange:
             iprange = self._parse_iprange(args.iprange)
             if iprange is None:
@@ -152,10 +142,6 @@ class MainMenu(CommandMenu):
         IO.spacer()
 
     def _hosts_handler(self, args):
-        """
-        Handles 'hosts' command-line argument
-        Displays discovered hosts
-        """
         table_data = [[
             '{}ID{}'.format(IO.Style.BRIGHT, IO.Style.RESET_ALL),
             '{}IP address{}'.format(IO.Style.BRIGHT, IO.Style.RESET_ALL),
@@ -185,15 +171,12 @@ class MainMenu(CommandMenu):
         IO.spacer()
 
     def _limit_handler(self, args):
-        """
-        Handles 'limit' command-line argument
-        Limits bandwith of host to specified rate
-        """
         hosts = self._get_hosts_by_ids(args.id)
         if hosts is None or len(hosts) == 0:
             return
 
         try:
+            from networking.utils import BitRate  # Import here to avoid circular dependency
             rate = BitRate.from_rate_string(args.rate)
         except Exception:
             IO.error('limit rate is invalid.')
@@ -209,10 +192,6 @@ class MainMenu(CommandMenu):
             IO.ok('{}{}{r} {} {}limited{r} to {}.'.format(IO.Fore.LIGHTYELLOW_EX, host.ip, Direction.pretty_direction(direction), IO.Fore.LIGHTRED_EX, rate, r=IO.Style.RESET_ALL))
 
     def _block_handler(self, args):
-        """
-        Handles 'block' command-line argument
-        Blocks internet communication for host
-        """
         hosts = self._get_hosts_by_ids(args.id)
         direction = self._parse_direction_args(args)
 
@@ -226,20 +205,12 @@ class MainMenu(CommandMenu):
                 IO.ok('{}{}{r} {} {}blocked{r}.'.format(IO.Fore.LIGHTYELLOW_EX, host.ip, Direction.pretty_direction(direction), IO.Fore.RED, r=IO.Style.RESET_ALL))
 
     def _free_handler(self, args):
-        """
-        Handles 'free' command-line argument
-        Frees the host from all limitations
-        """
         hosts = self._get_hosts_by_ids(args.id)
         if hosts is not None and len(hosts) > 0:
             for host in hosts:
                 self._free_host(host)
 
     def _add_handler(self, args):
-        """
-        Handles 'add' command-line argument
-        Adds custom host to host list
-        """
         ip = args.ip
         if not netutils.validate_ip_address(ip):
             IO.error('invalid ip address.')
@@ -258,510 +229,200 @@ class MainMenu(CommandMenu):
 
         name = None
         try:
-            host_info = socket.gethostbyaddr(ip)
-            name = None if host_info is None else host_info[0]
-        except socket.herror:
+            name = socket.gethostbyaddr(ip)[0]
+        except Exception:
             pass
 
         host = Host(ip, mac, name)
+        IO.ok('{}{}{r} {}added{r} to host list.'.format(IO.Fore.LIGHTYELLOW_EX, host.ip, IO.Fore.GREEN, r=IO.Style.RESET_ALL))
+        IO.spacer()
 
-        with self.hosts_lock:
-            if host in self.hosts:
-                IO.error('host does already exist.')
-                return
-
-            self.hosts.append(host) 
-
-        IO.ok('host added.')
+        self.hosts_lock.acquire()
+        self.hosts.append(host)
+        self.hosts_lock.release()
 
     def _monitor_handler(self, args):
-        """
-        Handles 'monitor' command-line argument
-        Monitors hosts bandwidth usage
-        """
-        def get_bandwidth_results():
-            with self.hosts_lock:
-                return sorted(
-                    [x for x in [(y, self.bandwidth_monitor.get(y)) for y in self.hosts] if x[1] is not None],
-                    key=lambda h: not (h[0].limited or h[0].blocked)
-                )
+        interval = None
 
-        def display(stdscr, interval):
-            host_results = get_bandwidth_results()
-            hname_max_len = max([len(x[0].name) for x in host_results])
-
-            header_off = [
-                ('ID', 5), ('IP address', 18), ('Hostname', hname_max_len + 2),
-                ('Current (per s)', 20), ('Total', 16), ('Packets', 0)
-            ]
-
-            y_rst = 1
-            x_rst = 2
-
-            while True:
-                y_off = y_rst
-                x_off = x_rst
-
-                stdscr.clear()
-
-                for header in header_off:
-                    stdscr.addstr(y_off, x_off, header[0])
-                    x_off += header[1]
-
-                y_off += 2
-                x_off = x_rst
-                temps_reached = False
-
-                for host, result in host_results:
-                    result_data = [
-                        str(self._get_host_id(host)),
-                        host.ip,
-                        host.name,
-                        '{}↑ {}↓'.format(result.upload_rate, result.download_rate),
-                        '{}↑ {}↓'.format(result.upload_total_size, result.download_total_size),
-                        '{}↑ {}↓'.format(result.upload_total_count, result.download_total_count)
-                    ]
-
-                    if not temps_reached and host in hosts_to_be_freed:
-                        temps_reached = True
-                        y_off += 1
-
-                    for j, string in enumerate(result_data):
-                        stdscr.addstr(y_off, x_off, string)
-                        x_off += header_off[j][1]
-
-                    y_off += 1
-                    x_off = x_rst
-
-                y_off += 2
-                stdscr.addstr(y_off, x_off, 'press \'ctrl+c\' to exit.')
-
-                try:
-                    stdscr.refresh()
-                    time.sleep(interval)
-                    host_results = get_bandwidth_results()
-                except KeyboardInterrupt:
-                    return
-                    
-        hosts = self._get_hosts_by_ids(args.id)
-        hosts_to_be_freed = set()
-
-        interval = 0.5  # in s
         if args.interval:
-            if not args.interval.isdigit():
+            try:
+                interval = int(args.interval)
+            except Exception:
                 IO.error('invalid interval.')
                 return
 
-            interval = int(args.interval) / 1000    # from ms to s
+        hosts = self._get_hosts_by_ids(args.id)
 
-        for host in hosts:
-            if not host.spoofed:
-                hosts_to_be_freed.add(host)
+        if hosts is not None and len(hosts) > 0:
+            for host in hosts:
+                if not host.spoofed:
+                    self.arp_spoofer.add(host)
 
-            self.arp_spoofer.add(host)
-            self.bandwidth_monitor.add(host)
-                
-        if len(get_bandwidth_results()) == 0:
-            IO.error('no hosts to be monitored.')
-            return
-
-        try:
-            curses.wrapper(display, interval)
-        except curses.error:
-            IO.error('monitor error occurred. maybe terminal too small?')
-
-        for host in hosts_to_be_freed:
-            self._free_host(host)
+                self.bandwidth_monitor.add(host, interval)
+                IO.ok('{}{}{r} is {}being monitored{r}.'.format(IO.Fore.LIGHTYELLOW_EX, host.ip, IO.Fore.GREEN, r=IO.Style.RESET_ALL))
 
     def _analyze_handler(self, args):
-        hosts = self._get_hosts_by_ids(args.id)
-        if hosts is None or len(hosts) == 0:
-            IO.error('no hosts to be analyzed.')
-            return
-        
-        duration = 30 # in s
+        duration = None
+
         if args.duration:
-            if not args.duration.isdigit():
+            try:
+                duration = int(args.duration)
+            except Exception:
                 IO.error('invalid duration.')
                 return
 
-            duration = int(args.duration)
+        hosts = self._get_hosts_by_ids(args.id)
+        if hosts is not None and len(hosts) > 0:
+            IO.spacer()
+            for host in hosts:
+                result = self.bandwidth_monitor.analyze(host, duration)
 
-        hosts_to_be_freed = set()
-        host_values = {}
+                table_data = [['Protocol', 'Upload', 'Download']]
+                total_upload = 0
+                total_download = 0
 
-        for host in hosts:
-            if not host.spoofed:
-                hosts_to_be_freed.add(host)
+                for key, value in result.items():
+                    table_data.append([
+                        key,
+                        BitRate(value['upload']),
+                        BitRate(value['download'])
+                    ])
 
-            self.arp_spoofer.add(host)
-            self.bandwidth_monitor.add(host)
+                    total_upload += value['upload']
+                    total_download += value['download']
 
-            host_result = self.bandwidth_monitor.get(host)
-            host_values[host] = {}
-            host_values[host]['prev'] = (host_result.upload_total_size, host_result.download_total_size)
+                table = SingleTable(table_data, host.ip)
+                IO.print(table.table)
+                IO.spacer()
 
-        IO.ok('analyzing traffic for {}s.'.format(duration))
-        time.sleep(duration)
-
-        error_occurred = False
-        for host in hosts:
-            host_result = self.bandwidth_monitor.get(host)
-
-            if host_result is None:
-                # host reconnected during analysis
-                IO.error('host reconnected during analysis.')
-                error_occurred = True
-            else:
-                host_values[host]['current'] = (host_result.upload_total_size, host_result.download_total_size)
-
-        IO.ok('cleaning up...')
-        for host in hosts_to_be_freed:
-            self._free_host(host)
-
-        if error_occurred:
-            return
-
-        upload_chart = BarChart(max_bar_length=29)
-        download_chart = BarChart(max_bar_length=29)
-
-        for host in hosts:
-            upload_value = host_values[host]['current'][0] - host_values[host]['prev'][0]
-            download_value = host_values[host]['current'][1] - host_values[host]['prev'][1]
-
-            prefix = '{}{}{} ({}, {})'.format(
-                IO.Fore.LIGHTYELLOW_EX, self._get_host_id(host), IO.Style.RESET_ALL,
-                host.ip,
-                host.name
-            )
-            
-            upload_chart.add_value(upload_value.value, prefix, upload_value)
-            download_chart.add_value(download_value.value, prefix, download_value)
-
-        upload_table = SingleTable([[upload_chart.get()]], 'Upload')
-        download_table = SingleTable([[download_chart.get()]], 'Download')
-
-        upload_table.inner_heading_row_border = False
-        download_table.inner_heading_row_border = False
-
-        IO.spacer()
-        IO.print(upload_table.table)
-        IO.print(download_table.table)
-        IO.spacer()
+                IO.ok('{}total upload:{} {}'.format(IO.Style.BRIGHT, IO.Style.RESET_ALL, BitRate(total_upload)))
+                IO.ok('{}total download:{} {}'.format(IO.Style.BRIGHT, IO.Style.RESET_ALL, BitRate(total_download)))
+                IO.spacer()
 
     def _watch_handler(self, args):
-        if len(args) == 0:
-            watch_table_data = [[
-                '{}ID{}'.format(IO.Style.BRIGHT, IO.Style.RESET_ALL),
-                '{}IP address{}'.format(IO.Style.BRIGHT, IO.Style.RESET_ALL),
-                '{}MAC address{}'.format(IO.Style.BRIGHT, IO.Style.RESET_ALL)
-            ]]
-
-            set_table_data = [[
-                '{}Attribute{}'.format(IO.Style.BRIGHT, IO.Style.RESET_ALL),
-                '{}Value{}'.format(IO.Style.BRIGHT, IO.Style.RESET_ALL)
-            ]]
-
-            hist_table_data = [[
-                '{}ID{}'.format(IO.Style.BRIGHT, IO.Style.RESET_ALL),
-                '{}Old IP address{}'.format(IO.Style.BRIGHT, IO.Style.RESET_ALL),
-                '{}New IP address{}'.format(IO.Style.BRIGHT, IO.Style.RESET_ALL),
-                '{}Time{}'.format(IO.Style.BRIGHT, IO.Style.RESET_ALL)
-            ]]
-
-            iprange = self.host_watcher.iprange
-            interval = self.host_watcher.interval
-            intensity = self.host_watcher.intensity
-
-            set_table_data.append([
-                '{}range{}'.format(IO.Fore.LIGHTYELLOW_EX, IO.Style.RESET_ALL),
-                '{} addresses'.format(len(iprange)) if iprange is not None else 'default'
-            ])
-
-            set_table_data.append([
-                '{}interval{}'.format(IO.Fore.LIGHTYELLOW_EX, IO.Style.RESET_ALL),
-                '{}s'.format(interval)
-            ])
-
-            set_table_data.append([
-                '{}intensity{}'.format(IO.Fore.LIGHTYELLOW_EX, IO.Style.RESET_ALL),
-                intensity
-            ])
-
-            for host in self.host_watcher.hosts:
-                watch_table_data.append([
-                    '{}{}{}'.format(IO.Fore.LIGHTYELLOW_EX, self._get_host_id(host), IO.Style.RESET_ALL),
-                    host.ip,
-                    host.mac
-                ])
-
-            for recon in self.host_watcher.log_list:
-                hist_table_data.append([
-                    recon['old'].mac,
-                    recon['old'].ip,
-                    recon['new'].ip,
-                    recon['time']
-                ])
-
-            watch_table = SingleTable(watch_table_data, "Watchlist")
-            set_table = SingleTable(set_table_data, "Settings")
-            hist_table = SingleTable(hist_table_data, 'Reconnection History')
-
-            IO.spacer()
-            IO.print(watch_table.table)
-            IO.spacer()
-            IO.print(set_table.table)
-            IO.spacer()
-            IO.print(hist_table.table)
-            IO.spacer()
+        self.parser.print_subparser_help('watch')
 
     def _watch_add_handler(self, args):
-        """
-        Handles 'watch add' command-line argument
-        Adds host to the reconnection watch list
-        """
         hosts = self._get_hosts_by_ids(args.id)
-        if hosts is None or len(hosts) == 0:
-            return
 
-        for host in hosts:
-            self.host_watcher.add(host)
+        if hosts is not None and len(hosts) > 0:
+            for host in hosts:
+                self.host_watcher.add(host)
+                IO.ok('{}{}{r} is {}being watched{r}.'.format(IO.Fore.LIGHTYELLOW_EX, host.ip, IO.Fore.GREEN, r=IO.Style.RESET_ALL))
 
     def _watch_remove_handler(self, args):
-        """
-        Handles 'watch remove' command-line argument
-        Removes host from the reconnection watch list
-        """
         hosts = self._get_hosts_by_ids(args.id)
-        if hosts is None or len(hosts) == 0:
-            return
 
-        for host in hosts:
-            self.host_watcher.remove(host)
+        if hosts is not None and len(hosts) > 0:
+            for host in hosts:
+                self.host_watcher.remove(host)
+                IO.ok('{}{}{r} is no longer {}being watched{r}.'.format(IO.Fore.LIGHTYELLOW_EX, host.ip, IO.Fore.GREEN, r=IO.Style.RESET_ALL))
 
     def _watch_set_handler(self, args):
-        """
-        Handles 'watch set' command-line argument
-        Modifies settings of the reconnection reconnection watcher
-        """
-        if args.attribute.lower() in ('range', 'iprange', 'ip_range'):
-            iprange = self._parse_iprange(args.value)
-            if iprange is not None:
-                self.host_watcher.iprange = iprange
-            else:
-                IO.error('invalid ip range.')
-        elif args.attribute.lower() in ('interval'):
-            if args.value.isdigit():
-                self.host_watcher.interval = int(args.value)
-            else:
-                IO.error('invalid interval.')
-        elif args.attribute.lower() in ('intensity', 'scan_intensity'):
-            intensity = self._parse_scan_intensity(args.value)
-            if intensity is not None:
-                self.host_watcher.intensity = intensity
-            else:
-                IO.error('invalid scan intensity level.')
-        else:
-            IO.error('{}{}{} is an invalid settings attribute.'.format(IO.Fore.LIGHTYELLOW_EX, args.attribute, IO.Style.RESET_ALL))
+        attribute = args.attribute
+        value = args.value
 
-    def _reconnect_callback(self, old_host, new_host):
-        """
-        Callback that is called when a watched host reconnects
-        Method will run in a separate thread
-        """
-        with self.hosts_lock:
-            if old_host in self.hosts:
-                self.hosts[self.hosts.index(old_host)] = new_host
-            else:
-                return
-
-        self.arp_spoofer.remove(old_host, restore=False)
-        self.arp_spoofer.add(new_host)
-
-        self.host_watcher.remove(old_host)
-        self.host_watcher.add(new_host)
-
-        self.limiter.replace(old_host, new_host)
-        self.bandwidth_monitor.replace(old_host, new_host)
-
-    def _clear_handler(self, args):
-        """
-        Handler for the 'clear' command-line argument
-        Clears the terminal window and re-prints the banner
-        """
-        IO.clear()
-        IO.print(get_main_banner(self.version))
-        self._print_help_reminder()
-
-    def _help_handler(self, args):
-        """
-        Handles 'help' command-line argument
-        Prints help message including commands and usage
-        """
-        spaces = ' ' * 35
-
-        IO.print(
-            """
-{y}scan (--range [IP range]){r}{}scans for online hosts on your network.
-{y}     (--intensity [(1,2,3)]){r}{}required to find the hosts you want to limit.
-{b}{s}e.g.: scan
-{s}      scan --range 192.168.178.1-192.168.178.50
-{s}      scan --range 192.168.178.1/24 --intensity 3{r}
-
-{y}hosts (--force){r}{}lists all scanned hosts.
-{s}contains host information, including IDs.
-
-{y}limit [ID1,ID2,...] [rate]{r}{}limits bandwith of host(s) (uload/dload).
-{y}      (--upload) (--download){r}{}{b}e.g.: limit 4 100kbit
-{s}      limit 2,3,4 1gbit --download
-{s}      limit all 200kbit --upload{r}
-
-{y}block [ID1,ID2,...]{r}{}blocks internet access of host(s).
-{y}      (--upload) (--download){r}{}{b}e.g.: block 3,2
-{s}      block all --upload{r}
-
-{y}free [ID1,ID2,...]{r}{}unlimits/unblocks host(s).
-{b}{s}e.g.: free 3
-{s}      free all{r}
-
-{y}add [IP] (--mac [MAC]){r}{}adds custom host to host list.
-{s}mac resolved automatically.
-{b}{s}e.g.: add 192.168.178.24
-{s}      add 192.168.1.50 --mac 1c:fc:bc:2d:a6:37{r}
-
-{y}monitor [ID1,ID2,...]{r}{}monitors bandwidth usage of host(s).
-{y}        (--interval [time in ms]){r}{}{b}e.g.: monitor all --interval 600{r}
-
-{y}analyze [ID1,ID2,...]{r}{}analyzes traffic of host(s) without limiting
-{y}        (--duration [time in s]){r}{}to determine who uses how much bandwidth.
-{b}{s}e.g.: analyze 2,3 --duration 120{r}
-
-{y}watch{r}{}detects host reconnects with different IP.
-{y}watch add [ID1,ID2,...]{r}{}adds host to the reconnection watchlist.
-{b}{s}e.g.: watch add 3,4{r}
-{y}watch remove [ID1,ID2,...]{r}{}removes host from the reconnection watchlist.
-{b}{s}e.g.: watch remove all{r}
-{y}watch set [attr] [value]{r}{}changes reconnect watch settings.
-{b}{s}e.g.: watch set interval 120
-{s}      watch set intensity 1{r}
-
-{y}clear{r}{}clears the terminal window.
-
-{y}quit{r}{}quits the application.
-            """.format(
-                    spaces[len('scan (--range [IP range])'):],
-                    spaces[len('     (--intensity [(1,2,3)])'):],
-                    spaces[len('hosts (--force)'):],
-                    spaces[len('limit [ID1,ID2,...] [rate]'):],
-                    spaces[len('      (--upload) (--download)'):],
-                    spaces[len('block [ID1,ID2,...]'):],
-                    spaces[len('      (--upload) (--download)'):],
-                    spaces[len('free [ID1,ID2,...]'):],
-                    spaces[len('add [IP] (--mac [MAC])'):],
-                    spaces[len('monitor [ID1,ID2,...]'):],
-                    spaces[len('        (--interval [time in ms])'):],
-                    spaces[len('analyze [ID1,ID2,...]'):],
-                    spaces[len('        (--duration [time in s])'):],
-                    spaces[len('watch'):],
-                    spaces[len('watch add [ID1,ID2,...]'):],
-                    spaces[len('watch remove [ID1,ID2,...]'):],
-                    spaces[len('watch set [attr] [value]'):],
-                    spaces[len('clear'):],
-                    spaces[len('quit'):],
-                    y=IO.Fore.LIGHTYELLOW_EX, r=IO.Style.RESET_ALL, b=IO.Style.BRIGHT,
-                    s=spaces
-                )
-        )
+        self.host_watcher.set(attribute, value)
+        IO.ok('attribute {}{}{} set to {}{}{}.'.format(IO.Style.BRIGHT, attribute, IO.Style.RESET_ALL, IO.Style.BRIGHT, value, IO.Style.RESET_ALL))
 
     def _quit_handler(self, args):
-        self.interrupt_handler(False)
+        self.interrupt_handler(ctrl_c=False)
         self.stop()
 
-    def _get_host_id(self, host, lock=True):
-        ret = None
+    def _help_handler(self, args):
+        self.parser.print_help()
 
-        if lock:
-            self.hosts_lock.acquire()
-
-        for i, host_ in enumerate(self.hosts):
-            if host_ == host:
-                ret = i
-                break
-        
-        if lock:
-            self.hosts_lock.release()
-
-        return ret
+    def _clear_handler(self, args):
+        IO.clear()
 
     def _print_help_reminder(self):
-        IO.print('type {Y}help{R} or {Y}?{R} to show command information.'.format(Y=IO.Fore.LIGHTYELLOW_EX, R=IO.Style.RESET_ALL))
+        IO.spacer()
+        IO.ok('{}type {}help{} for available commands.'.format(IO.Style.BRIGHT, IO.Fore.LIGHTYELLOW_EX, IO.Style.RESET_ALL))
+        IO.spacer()
 
-    def _get_hosts_by_ids(self, ids_string):
-        if ids_string == 'all':
-            with self.hosts_lock:
-                return self.hosts.copy()
+    def _reconnect_callback(self, host):
+        if host.spoofed:
+            self.arp_spoofer.add(host)
 
-        ids = ids_string.split(',')
-        hosts = set()
+        self.bandwidth_monitor.add(host)
+
+    def _parse_iprange(self, iprange):
+        result = []
+
+        iprange = iprange.split(',')
+        for ip in iprange:
+            ip = ip.strip()
+
+            try:
+                if '-' in ip:
+                    ip = ip.split('-')
+                    for i in netaddr.IPRange(ip[0], ip[1]):
+                        result.append(i)
+                else:
+                    for i in netaddr.IPNetwork(ip):
+                        result.append(i)
+            except Exception:
+                return None
+
+        return result
+
+    def _parse_scan_intensity(self, intensity):
+        if intensity == 'low':
+            return ScanIntensity.LOW
+
+        if intensity == 'normal':
+            return ScanIntensity.NORMAL
+
+        if intensity == 'high':
+            return ScanIntensity.HIGH
+
+        return None
+
+    def _get_hosts_by_ids(self, ids):
+        hosts = []
+        ids = ids.split(',')
+        ids = list(map(str.strip, ids))
 
         with self.hosts_lock:
-            for id_ in ids:
-                is_mac = netutils.validate_mac_address(id_)
-                is_ip = netutils.validate_ip_address(id_)
-                is_id_ = id_.isdigit()
+            for id in ids:
+                for host in self.hosts:
+                    if str(self._get_host_id(host, lock=False)) == id:
+                        hosts.append(host)
 
-                if not is_mac and not is_ip and not is_id_:
-                    IO.error('invalid identifier(s): \'{}\'.'.format(ids_string))
-                    return
-
-                if is_mac or is_ip:
-                    found = False
-                    for host in self.hosts:
-                        if host.mac == id_.lower() or host.ip == id_:
-                            found = True
-                            hosts.add(host)
-                            break
-                    if not found:
-                        IO.error('no host matching {}{}{}.'.format(IO.Fore.LIGHTYELLOW_EX, id_, IO.Style.RESET_ALL))
-                        return
-                else:
-                    id_ = int(id_)
-                    if len(self.hosts) == 0 or id_ not in range(len(self.hosts)):
-                        IO.error('no host with id {}{}{}.'.format(IO.Fore.LIGHTYELLOW_EX, id_, IO.Style.RESET_ALL))
-                        return
-                    hosts.add(self.hosts[id_])
+        if len(hosts) == 0:
+            IO.error('no matching hosts found.')
 
         return hosts
 
-    def _parse_direction_args(self, args):
-        direction = Direction.NONE
+    def _get_host_id(self, host, lock=True):
+        if lock:
+            self.hosts_lock.acquire()
 
-        if args.upload:
-            direction |= Direction.OUTGOING
-        if args.download:
-            direction |= Direction.INCOMING
+        result = self.hosts.index(host)
 
-        return Direction.BOTH if direction == Direction.NONE else direction
+        if lock:
+            self.hosts_lock.release()
 
-    def _parse_iprange(self, range):
-        try:
-            if '-' in range:
-                return list(netaddr.iter_iprange(*range.split('-')))
-            else:
-                return list(netaddr.IPNetwork(range))
-        except netaddr.core.AddrFormatError:
-            return
-
-    def _parse_scan_intensity(self, value):
-        if value.isdigit() and int(value) in (ScanIntensity.QUICK, ScanIntensity.NORMAL, ScanIntensity.INTENSE):
-            return int(value)
+        return result
 
     def _free_host(self, host):
-        """
-        Stops ARP spoofing and unlimits host
-        """
         if host.spoofed:
             self.arp_spoofer.remove(host)
-            self.limiter.unlimit(host, Direction.BOTH)
-            self.bandwidth_monitor.remove(host)
-            self.host_watcher.remove(host)
+
+        self.limiter.free(host)
+        self.bandwidth_monitor.remove(host)
+
+        with self.hosts_lock:
+            self.hosts.remove(host)
+
+        IO.ok('{}{}{r} {}freed{r}.'.format(IO.Fore.LIGHTYELLOW_EX, host.ip, IO.Fore.RED, r=IO.Style.RESET_ALL))
+
+    def _parse_direction_args(self, args):
+        direction = Direction.DOWNLOAD
+
+        if args.upload and args.download:
+            direction = Direction.ALL
+        elif args.upload:
+            direction = Direction.UPLOAD
+
+        return direction

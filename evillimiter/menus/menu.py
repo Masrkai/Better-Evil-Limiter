@@ -2,7 +2,7 @@ import enum
 import collections
 
 from .parser import CommandParser
-from evillimiter.console.io import IO
+from console.io import IO
 
 
 class CommandMenu(object):

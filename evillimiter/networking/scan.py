@@ -8,7 +8,7 @@ from scapy.all import sr1, ARP # pylint: disable=no-name-in-module
 from concurrent.futures import ThreadPoolExecutor
 
 from .host import Host
-from evillimiter.console.io import IO
+from console.io import IO
         
 
 class HostScanner(object):

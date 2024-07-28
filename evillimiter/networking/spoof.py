@@ -3,7 +3,7 @@ import threading
 from scapy.all import ARP, send # pylint: disable=no-name-in-module
 
 from .host import Host
-from evillimiter.common.globals import BROADCAST
+from common.globals import BROADCAST
 
 
 class ARPSpoofer(object):
